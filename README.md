@@ -1,4 +1,4 @@
-# HelpHub: Cloud-Connected AI Learning Platform (Android)
+# HelpHub: Cloud-Connected AI Learning Platform
 
 HelpHub is an Android application designed to speed up mobile learning. Built as an expansion of a foundational quizzing app (Task 6.1D), this version introduces cloud data persistence, LLM analytics, and secure payment using modern Android development practices.
 
