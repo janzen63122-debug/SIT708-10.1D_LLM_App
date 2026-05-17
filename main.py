@@ -1,11 +1,31 @@
 from flask import Flask, request, jsonify
+from pymongo import MongoClient
+import certifi
 import re
 import ollama
+import stripe
  
 app = Flask(__name__)
+stripe.api_key = "sk_test_51TVQmLHv1LjUfcrTAbEL3601bC037n4NTMUBsNCRavKRhxduhm2pXvcTvP99FREwsKutKTakWZsU3b9coB9O7pst00FEUJH5nF"
  
+MONGO_URI = "mongodb+srv://janzen63122_db_user:Tqa2lRYwRJsSfEQ6@helphubcluster.3rvdbf8.mongodb.net/?appName=HelpHubCluster"
+
+try:
+    client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+    
+    
+    db = client["helphub_db"]
+    
+    history_collection = db["quiz_history"]
+    
+    
+    client.admin.command('ping')
+    print("✅ Successfully connected to MongoDB Atlas!")
+except Exception as e:
+    print("❌ Failed to connect to MongoDB:", e)
+
+# --- OLLAMA AI SETUP ---
 MODEL = "qwen2.5:3b"
- 
  
 def call_llm(prompt: str, max_tokens: int = 200) -> str:
     response = ollama.chat(
@@ -15,10 +35,7 @@ def call_llm(prompt: str, max_tokens: int = 200) -> str:
     )
     return response["message"]["content"]
  
- 
-
 def fetchQuizFromLlama(student_topic: str) -> str:
-    # Use only the first topic if multiple were selected
     if ',' in student_topic:
         student_topic = student_topic.split(',')[0].strip()
     print(f"Fetching quiz for topic: {student_topic}")
@@ -34,10 +51,7 @@ def fetchQuizFromLlama(student_topic: str) -> str:
         f"ANS: A\n\n"
         f"Now write all 3 questions using only the format above:"
     )
-    result = call_llm(query, max_tokens=800)
-    print(result)
-    return result
- 
+    return call_llm(query, max_tokens=800)
  
 def process_quiz(quiz_text: str) -> list:
     questions = []
@@ -64,8 +78,6 @@ def process_quiz(quiz_text: str) -> list:
         })
     return questions[:3]
  
- 
-
 def fetchHintFromLlama(question: str) -> str:
     print(f"Fetching hint for: {question}")
     query = (
@@ -75,8 +87,6 @@ def fetchHintFromLlama(question: str) -> str:
     )
     return call_llm(query, max_tokens=150)
  
- 
-
 def fetchExplanationFromLlama(question: str, answer: str) -> str:
     print(f"Fetching explanation for q='{question}', a='{answer}'")
     query = (
@@ -85,16 +95,22 @@ def fetchExplanationFromLlama(question: str, answer: str) -> str:
         f"Student's answer: {answer}"
     )
     return call_llm(query, max_tokens=200)
- 
+
+def fetchSummaryFromLlama(mistakes: str) -> str:
+    print("Fetching summary for incorrect answers...")
+    query = (
+        f"A student got the following questions wrong:\n{mistakes}\n"
+        f"In exactly 1 or 2 sentences, briefly summarize the core topics they struggle with and offer an encouraging tip."
+    )
+    return call_llm(query, max_tokens=150)
+
 
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"message": "Welcome to the Flask API!"}), 200
  
- 
 @app.route("/getQuiz", methods=["GET"])
 def get_quiz():
-    print("getQuiz request received")
     topic = request.args.get("topic")
     if not topic:
         return jsonify({"error": "Missing topic parameter"}), 400
@@ -104,35 +120,89 @@ def get_quiz():
         return jsonify({"error": "Could not parse quiz.", "raw": raw}), 500
     return jsonify({"quiz": parsed}), 200
  
- 
 @app.route("/getHint", methods=["GET"])
 def get_hint():
-    print("getHint request received")
     question = request.args.get("question")
     if not question:
         return jsonify({"error": "Missing question parameter"}), 400
     hint = fetchHintFromLlama(question)
     return jsonify({"hint": hint}), 200
  
- 
 @app.route("/getExplanation", methods=["GET"])
 def get_explanation():
-    print("getExplanation request received")
     question = request.args.get("question")
     answer = request.args.get("answer")
     if not question or not answer:
-        return jsonify({"error": "Missing question or answer parameter"}), 400
+        return jsonify({"error": "Missing parameters"}), 400
     explanation = fetchExplanationFromLlama(question, answer)
     return jsonify({"explanation": explanation}), 200
- 
- 
-@app.route("/test", methods=["GET"])
-def run_test():
-    return jsonify({"quiz": "test"}), 200
- 
+
+# FOR DATABASE ---
+
+@app.route("/saveHistory", methods=["POST"])
+def save_history():
+    """Saves a completed quiz result to MongoDB"""
+    data = request.json
+    if not data or "username" not in data or "results" not in data:
+        return jsonify({"error": "Missing username or results data"}), 400
+    
+    try:
+        
+        history_collection.insert_one(data)
+        return jsonify({"message": "History saved successfully!"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/getHistory", methods=["GET"])
+def get_history():
+    """Fetches a user's past quizzes from MongoDB"""
+    username = request.args.get("username")
+    if not username:
+        return jsonify({"error": "Missing username parameter"}), 400
+    
+    try:
+        
+        user_history = list(history_collection.find({"username": username}, {"_id": 0}))
+        return jsonify({"history": user_history}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/getSummary", methods=["POST"])
+def get_summary():
+    """Generates a brief summary of the user's incorrect answers"""
+    data = request.json
+    mistakes = data.get("mistakes", "")
+    
+    if not mistakes:
+        return jsonify({"summary": "Perfect score! Keep up the great work."}), 200
+        
+    try:
+        summary = fetchSummaryFromLlama(mistakes)
+        return jsonify({"summary": summary}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route("/create-payment-intent", methods=["POST"])
+def create_payment():
+    try:
+        data = request.json
+        
+        amount = data.get("amount", 499) 
+
+        
+        intent = stripe.PaymentIntent.create(
+            amount=amount,
+            currency="aud", # Australian Dollars
+            automatic_payment_methods={
+                'enabled': True,
+            },
+        )
+        
+        return jsonify({'clientSecret': intent['client_secret']}), 200
+    except Exception as e:
+        return jsonify(error=str(e)), 403
  
 if __name__ == "__main__":
     port_num = 5000
     print(f"App running on port {port_num}")
     app.run(port=port_num, host="0.0.0.0")
- 
