@@ -18,7 +18,7 @@ public class DashboardActivity extends AppCompatActivity {
 
         TextView tvWelcome = findViewById(R.id.tvWelcome);
         Button btnStartQuiz = findViewById(R.id.btnStartQuiz);
-
+        Button btnProfile = findViewById(R.id.btnProfile);
 
         SharedPreferences prefs = getSharedPreferences("HelpHubDatabase", MODE_PRIVATE);
         String savedName = prefs.getString("SAVED_NAME", "Student");
@@ -33,6 +33,16 @@ public class DashboardActivity extends AppCompatActivity {
                 @Override
                 public void onClick(View v) {
                     Intent intent = new Intent(DashboardActivity.this, TaskActivity.class);
+                    startActivity(intent);
+                }
+            });
+        }
+
+        if (btnProfile != null) {
+            btnProfile.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Intent intent = new Intent(DashboardActivity.this, ProfileActivity.class);
                     startActivity(intent);
                 }
             });

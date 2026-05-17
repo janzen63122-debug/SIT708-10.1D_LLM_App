@@ -30,6 +30,9 @@
         <activity android:name=".DashboardActivity" />
         <activity android:name=".TaskActivity" />
         <activity android:name=".ResultsActivity" />
+        <activity android:name=".ProfileActivity" />
+        <activity android:name=".HistoryActivity" />
+        <activity android:name=".UpgradeActivity" />
 
     </application>
 </manifest>

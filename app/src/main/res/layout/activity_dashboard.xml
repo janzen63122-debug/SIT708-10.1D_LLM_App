@@ -35,4 +35,12 @@
         android:backgroundTint="#00FF00"
         android:textColor="#000000"/>
 
+    <Button
+        android:id="@+id/btnProfile"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="My Profile &amp; Stats"
+        android:backgroundTint="#FF9800"
+        android:textColor="#FFFFFF"/>
+
 </LinearLayout>
